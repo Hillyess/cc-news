@@ -1,0 +1,99 @@
+{
+  "sources": {
+    "36kr": {
+      "enabled": true,
+      "name": "36kr",
+      "url": "https://36kr.com",
+      "selectors": [
+        "a[href*=\"/p/\"]",
+        "a.item-title",
+        ".article-title",
+        "h3.title a"
+      ],
+      "icon": "💼"
+    },
+    "techcrunch": {
+      "enabled": true,
+      "name": "TechCrunch",
+      "url": "https://techcrunch.com",
+      "selectors": [
+        "h2.post-block__title a",
+        ".post-title a",
+        "h3 a",
+        ".article-title"
+      ],
+      "icon": "🚀"
+    },
+    "huxiu": {
+      "enabled": true,
+      "name": "虎嗅",
+      "url": "https://www.huxiu.com",
+      "selectors": [
+        ".article-title",
+        "h3.title a",
+        ".news-title",
+        "a.item-title"
+      ],
+      "icon": "🦆"
+    },
+    "tmtpost": {
+      "enabled": true,
+      "name": "钛媒体",
+      "url": "https://www.tmtpost.com",
+      "selectors": [
+        "a._tit",
+        ".item ._tit",
+        "h3 a",
+        ".article-title"
+      ],
+      "icon": "🔧"
+    },
+    "leiphone": {
+      "enabled": true,
+      "name": "雷锋网",
+      "url": "https://www.leiphone.com",
+      "selectors": [
+        "h3 a",
+        "a[href*=\"news\"]",
+        ".article-title",
+        ".news-title"
+      ],
+      "icon": "⚡"
+    },
+    "cls_telegraph": {
+      "enabled": true,
+      "name": "财联社电报",
+      "url": "https://www.cls.cn/telegraph",
+      "selectors": [
+        "strong",
+        "div strong",
+        "[class*=\"telegraph\"] strong"
+      ],
+      "icon": "📈"
+    },
+    "cls_finance": {
+      "enabled": true,
+      "name": "财联社盘面",
+      "url": "https://www.cls.cn/subject/1103",
+      "selectors": [
+        "a[href*=\"/detail/\"] strong",
+        "strong",
+        "a[href*=\"/detail/\"]",
+        ".c-222 strong"
+      ],
+      "icon": "📈"
+    },
+    "cls_depth": {
+      "enabled": true,
+      "name": "财联社深度",
+      "url": "https://www.cls.cn/depth?id=1000",
+      "selectors": [
+        "a[href*=\"/depth/\"]",
+        ".title",
+        "h3 a",
+        "div strong"
+      ],
+      "icon": "📈"
+    }
+  }
+}
