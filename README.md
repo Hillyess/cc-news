@@ -155,6 +155,31 @@ curl -s http://localhost:8765/status
 
 # 检查配置
 cat ~/.claude/settings.json | jq .statusLine
+
+# 修复脚本权限（如果需要）
+chmod +x ~/.claude-news-statusline/news_service.py
+chmod +x ~/.claude-news-statusline/status_line.sh
+```
+
+### 状态栏显示 "News service connecting..."
+
+如果状态栏一直显示连接中，可能是服务进程卡住：
+
+```bash
+# 1. 检查服务进程
+lsof -i :8765
+
+# 2. 强制终止卡住的进程
+pkill -f news_service.py
+# 或者根据PID强制终止：kill -9 <PID>
+
+# 3. 重新启动服务
+python3 ~/.claude-news-statusline/news_service.py &
+
+# 4. 测试服务响应
+curl -s http://localhost:8765/status --max-time 5
+
+# 5. 如果服务正常，重启 Claude Code
 ```
 
 ### 重置配置
@@ -163,11 +188,11 @@ cat ~/.claude/settings.json | jq .statusLine
 cp ~/.claude/settings.json.backup.* ~/.claude/settings.json
 
 # 重新运行安装
-./setup.sh
+./install.sh
 
 # 手动重启服务
 pkill -f news_service.py
-../venv/bin/python3 news_service.py &
+python3 ~/.claude-news-statusline/news_service.py &
 ```
 
 
