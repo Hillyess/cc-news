@@ -1,6 +1,6 @@
 # Claude Code 新闻状态栏插件
 
-[![GitHub release](https://img.shields.io/github/release/username/claude-code-news-statusline.svg)](https://github.com/Hillyess/claude-code-news-statusline/releases)
+[![GitHub release](https://img.shields.io/github/release/Hillyess/cc-news.svg)](https://github.com/Hillyess/cc-news/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
@@ -36,15 +36,15 @@
 ### 方式一：一键安装（推荐）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Hillyess/claude-code-news-statusline/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Hillyess/cc-news/main/install.sh | bash
 ```
 
 ### 方式二：手动安装
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/Hillyess/claude-code-news-statusline.git
-cd claude-code-news-statusline
+git clone https://github.com/Hillyess/cc-news.git
+cd cc-news
 
 # 2. 安装依赖
 pip3 install -r requirements.txt
