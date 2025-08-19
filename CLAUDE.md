@@ -131,7 +131,7 @@ This refactored project integrates with Claude Code through simplified hooks con
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/didi/cc-status-line/refactored-news-statusline/../venv/bin/python3 /Users/didi/cc-status-line/refactored-news-statusline/news_service.py",
+            "command": "~/cc-status-line/refactored-news-statusline/../venv/bin/python3 ~/cc-status-line/refactored-news-statusline/news_service.py",
             "timeout": 30
           }
         ]
@@ -141,7 +141,7 @@ This refactored project integrates with Claude Code through simplified hooks con
         "hooks": [
           {
             "type": "command", 
-            "command": "/Users/didi/cc-status-line/refactored-news-statusline/../venv/bin/python3 /Users/didi/cc-status-line/refactored-news-statusline/news_service.py",
+            "command": "~/cc-status-line/refactored-news-statusline/../venv/bin/python3 ~/cc-status-line/refactored-news-statusline/news_service.py",
             "timeout": 30
           }
         ]
@@ -151,7 +151,7 @@ This refactored project integrates with Claude Code through simplified hooks con
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/didi/cc-status-line/refactored-news-statusline/../venv/bin/python3 /Users/didi/cc-status-line/refactored-news-statusline/news_service.py", 
+            "command": "~/cc-status-line/refactored-news-statusline/../venv/bin/python3 ~/cc-status-line/refactored-news-statusline/news_service.py", 
             "timeout": 30
           }
         ]
@@ -160,7 +160,7 @@ This refactored project integrates with Claude Code through simplified hooks con
   },
   "statusLine": {
     "type": "command",
-    "command": "/Users/didi/cc-status-line/refactored-news-statusline/status_line.sh"
+    "command": "~/cc-status-line/refactored-news-statusline/status_line.sh"
   }
 }
 ```
