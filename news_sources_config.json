@@ -1,7 +1,7 @@
 {
   "sources": {
     "36kr": {
-      "enabled": true,
+      "enabled": false,
       "name": "36kr",
       "url": "https://36kr.com",
       "selectors": [
@@ -13,7 +13,7 @@
       "icon": "💼"
     },
     "techcrunch": {
-      "enabled": true,
+      "enabled": false,
       "name": "TechCrunch",
       "url": "https://techcrunch.com",
       "selectors": [
@@ -25,7 +25,7 @@
       "icon": "🚀"
     },
     "huxiu": {
-      "enabled": true,
+      "enabled": false,
       "name": "虎嗅",
       "url": "https://www.huxiu.com",
       "selectors": [
@@ -37,7 +37,7 @@
       "icon": "🦆"
     },
     "tmtpost": {
-      "enabled": true,
+      "enabled": false,
       "name": "钛媒体",
       "url": "https://www.tmtpost.com",
       "selectors": [
@@ -49,7 +49,7 @@
       "icon": "🔧"
     },
     "leiphone": {
-      "enabled": true,
+      "enabled": false,
       "name": "雷锋网",
       "url": "https://www.leiphone.com",
       "selectors": [
@@ -65,9 +65,10 @@
       "name": "财联社电报",
       "url": "https://www.cls.cn/telegraph",
       "selectors": [
-        "strong",
-        "div strong",
-        "[class*=\"telegraph\"] strong"
+        ".telegraph-content a",
+        "a[href*=\"/telegraph/\"]",
+        ".telegraph-item a",
+        "a"
       ],
       "icon": "📈"
     },
@@ -76,10 +77,10 @@
       "name": "财联社盘面",
       "url": "https://www.cls.cn/subject/1103",
       "selectors": [
-        "a[href*=\"/detail/\"] strong",
-        "strong",
         "a[href*=\"/detail/\"]",
-        ".c-222 strong"
+        ".article-item a",
+        ".news-item a",
+        "a"
       ],
       "icon": "📈"
     },
@@ -89,9 +90,9 @@
       "url": "https://www.cls.cn/depth?id=1000",
       "selectors": [
         "a[href*=\"/depth/\"]",
-        ".title",
+        ".depth-item a",
         "h3 a",
-        "div strong"
+        "a"
       ],
       "icon": "📈"
     }
