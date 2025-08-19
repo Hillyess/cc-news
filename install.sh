@@ -10,7 +10,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 # 项目信息
-REPO_URL="https://github.com/Hillyess/claude-code-news-statusline"
+REPO_URL="https://github.com/Hillyess/cc-news"
 INSTALL_DIR="$HOME/.claude-news-statusline"
 
 echo "=== Claude Code 新闻状态栏插件安装 ==="
@@ -78,43 +78,9 @@ fi
 # 复制配置文件
 cp "$INSTALL_DIR/news_sources_config.json" "$CLAUDE_DIR/"
 
-# 生成 Claude Code 配置
+# 生成 Claude Code 配置（安全模式，仅状态栏）
 cat > "$SETTINGS_FILE" << EOF
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 $INSTALL_DIR/news_service.py",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "matcher": "resume",
-        "hooks": [
-          {
-            "type": "command", 
-            "command": "python3 $INSTALL_DIR/news_service.py",
-            "timeout": 30
-          }
-        ]
-      },
-      {
-        "matcher": "clear",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 $INSTALL_DIR/news_service.py", 
-            "timeout": 30
-          }
-        ]
-      }
-    ]
-  },
   "statusLine": {
     "type": "command",
     "command": "$INSTALL_DIR/status_line.sh"
@@ -139,8 +105,14 @@ echo ""
 echo -e "${GREEN}🎉 安装完成！${NC}"
 echo ""
 echo "下一步："
-echo "1. 重启 Claude Code"
-echo "2. 新闻将在状态栏显示"
+echo "1. 启动新闻服务："
+echo "   python3 $INSTALL_DIR/news_service.py &"
+echo "2. 重启 Claude Code"
+echo "3. 新闻将在状态栏显示"
+echo ""
+echo "重要说明："
+echo "- 每次重启系统后需要手动启动新闻服务"
+echo "- 可以将启动命令添加到 ~/.bashrc 实现自动启动"
 echo ""
 echo "配置文件: ~/.claude/news_sources_config.json"
 echo "安装目录: $INSTALL_DIR"
