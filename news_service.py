@@ -141,9 +141,10 @@ class NewsPool:
                     'name': '财联社电报',
                     'url': 'https://www.cls.cn/telegraph',
                     'selectors': [
-                        'strong',
-                        'div strong',
-                        '[class*="telegraph"] strong'
+                        '.telegraph-content a',
+                        'a[href*="/telegraph/"]',
+                        '.telegraph-item a',
+                        'a'
                     ],
                     'icon': '📈'
                 },
@@ -152,12 +153,12 @@ class NewsPool:
                     'name': '财联社盘面',
                     'url': 'https://www.cls.cn/subject/1103',
                     'selectors': [
-                        'a[href*="/detail/"] strong',
-                        'strong',
                         'a[href*="/detail/"]',
-                        '.c-222 strong'
+                        '.article-item a',
+                        '.news-item a',
+                        'a'
                     ],
-                    'icon': '📈'
+                    'icon': '💹'
                 },
                 'cls_depth': {
                     'enabled': True,
@@ -165,11 +166,11 @@ class NewsPool:
                     'url': 'https://www.cls.cn/depth?id=1000',
                     'selectors': [
                         'a[href*="/depth/"]',
-                        '.title',
+                        '.depth-item a',
                         'h3 a',
-                        'div strong'
+                        'a'
                     ],
-                    'icon': '📈'
+                    'icon': '📊'
                 }
             }
         }
@@ -300,7 +301,11 @@ class NewsPool:
                         # 处理相对URL
                         if url and not url.startswith('http'):
                             if url.startswith('/'):
-                                url = f"{source_config['url'].rstrip('/')}{url}"
+                                # 获取基础域名
+                                from urllib.parse import urlparse
+                                parsed_url = urlparse(source_config['url'])
+                                base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+                                url = f"{base_url}{url}"
                             else:
                                 url = f"{source_config['url'].rstrip('/')}/{url}"
                         
