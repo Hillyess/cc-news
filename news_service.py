@@ -32,25 +32,35 @@ logger = logging.getLogger(__name__)
 
 class NewsItem:
     """新闻项数据结构"""
-    def __init__(self, title: str, url: str, source: str = ""):
+    def __init__(self, title: str, url: str, source: str = "", news_time: Optional[str] = None, stock_info: Optional[str] = None):
         self.title = title
         self.url = url
         self.source = source
-        self.timestamp = datetime.now()
+        self.news_time = news_time  # 新闻实际发布时间
+        self.stock_info = stock_info  # 相关股票信息
+        self.timestamp = datetime.now()  # 抓取时间
         self.id = f"{source}_{hash(title)}_{int(self.timestamp.timestamp())}"
     
     def to_dict(self) -> Dict:
-        return {
+        result = {
             'id': self.id,
             'title': self.title,
             'url': self.url,
             'source': self.source,
             'timestamp': self.timestamp.isoformat()
         }
+        
+        # 添加可选字段
+        if self.news_time:
+            result['news_time'] = self.news_time
+        if self.stock_info:
+            result['stock_info'] = self.stock_info
+            
+        return result
 
 class NewsPool:
     """新闻池管理器"""
-    def __init__(self, max_size: int = 100, refresh_interval: int = 120):
+    def __init__(self, max_size: int = 100, refresh_interval: int = 60):
         self.news_items: List[NewsItem] = []
         self.max_size = max_size
         self.refresh_interval = refresh_interval
@@ -309,7 +319,16 @@ class NewsPool:
                             else:
                                 url = f"{source_config['url'].rstrip('/')}/{url}"
                         
-                        news_item = NewsItem(title, url, source_config['name'])
+                        # 对财联社来源提取额外信息
+                        news_time = None
+                        stock_info = None
+                        
+                        if "财联社" in source_config['name'] and url:
+                            extracted_data = self._extract_cls_data(url, soup, element)
+                            news_time = extracted_data.get('news_time')
+                            stock_info = extracted_data.get('stock_info')
+                        
+                        news_item = NewsItem(title, url, source_config['name'], news_time, stock_info)
                         news_items.append(news_item)
                 
                 except Exception as e:
@@ -322,6 +341,121 @@ class NewsPool:
             logger.error(f"获取新闻失败 {source_config['name']}: {e}")
             return []
     
+    def _extract_cls_data(self, url: str, soup: BeautifulSoup, element) -> Dict:
+        """提取财联社特定数据：时间和股票信息"""
+        result = {'news_time': None, 'stock_info': None}
+        
+        try:
+            # 如果是详情页面，需要访问页面提取信息
+            if '/detail/' in url:
+                result = self._fetch_detail_page_data(url)
+                
+            elif 'telegraph' in url:
+                # 如果是电报页面，直接从当前页面提取
+                result = self._extract_from_telegraph_page(soup, element)
+                
+        except Exception as e:
+            logger.debug(f"提取CLS数据错误: {e}")
+        
+        return result
+    
+    def _fetch_detail_page_data(self, url: str) -> Dict:
+        """访问详情页面获取时间和股票信息"""
+        result = {'news_time': None, 'stock_info': None}
+        
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            detail_soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # 提取时间信息 - 财联社详情页的时间格式
+            # 查找可能的时间元素
+            time_selectors = [
+                '.time',
+                '.publish-time',
+                '[class*="time"]',
+                '.article-time',
+                'time'
+            ]
+            
+            for selector in time_selectors:
+                time_element = detail_soup.select_one(selector)
+                if time_element:
+                    time_text = time_element.get_text(strip=True)
+                    if time_text and ('年' in time_text or '月' in time_text or ':' in time_text):
+                        result['news_time'] = time_text
+                        break
+            
+            # 提取股票信息 - 查找股票相关元素
+            stock_selectors = [
+                '.industry-stock a',
+                '[class*="stock"] a',
+                'a[href*="stock"]'
+            ]
+            
+            for selector in stock_selectors:
+                stock_elements = detail_soup.select(selector)
+                if stock_elements:
+                    stock_items = []
+                    for elem in stock_elements[:5]:  # 最多5只股票
+                        name_span = elem.find('span', class_='c-222') or elem.find('span')
+                        change_span = elem.find('span', class_='c-de0422') or elem.find_all('span')[-1] if elem.find_all('span') else None
+                        
+                        if name_span and change_span:
+                            name = name_span.get_text(strip=True)
+                            change = change_span.get_text(strip=True)
+                            if '+' in change or '-' in change or '%' in change:
+                                stock_items.append(f"{name} {change}")
+                    
+                    if stock_items:
+                        result['stock_info'] = ' '.join(stock_items)
+                        break
+                        
+        except Exception as e:
+            logger.debug(f"获取详情页面数据错误: {e}")
+            
+        return result
+    
+    def _extract_from_telegraph_page(self, soup: BeautifulSoup, element) -> Dict:
+        """从电报页面提取数据"""
+        result = {'news_time': None, 'stock_info': None}
+        
+        try:
+            # 提取时间信息
+            time_element = soup.find('span', class_='telegraph-time-box')
+            if time_element:
+                time_text = time_element.get_text(strip=True)
+                if time_text and ':' in time_text:
+                    # 格式化时间（添加今天的日期）
+                    today = datetime.now().strftime('%Y-%m-%d')
+                    result['news_time'] = f"{today} {time_text}"
+            
+            # 提取股票信息
+            stock_container = soup.find('div', class_='industry-stock')
+            if stock_container:
+                stock_items = []
+                stock_links = stock_container.find_all('a')
+                for link in stock_links[:5]:  # 最多5只股票
+                    name_span = link.find('span', class_='c-222')
+                    change_span = link.find('span', class_='c-de0422')
+                    if name_span and change_span:
+                        name = name_span.get_text(strip=True)
+                        change = change_span.get_text(strip=True)
+                        stock_items.append(f"{name} {change}")
+                
+                if stock_items:
+                    result['stock_info'] = ' '.join(stock_items)
+                    
+        except Exception as e:
+            logger.debug(f"从电报页面提取数据错误: {e}")
+            
+        return result
+    
     def get_next_news(self) -> Optional[NewsItem]:
         """获取下一条新闻（时间轮播）"""
         with self.lock:
@@ -330,7 +464,7 @@ class NewsPool:
             
             # 基于时间的伪随机轮播
             current_epoch = int(time.time())
-            rotation_interval = 30  # 30秒轮播一次
+            rotation_interval = 5  # 5秒轮播一次
             rotation_index = (current_epoch // rotation_interval) % len(self.news_items)
             
             return self.news_items[rotation_index]
