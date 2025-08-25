@@ -15,9 +15,10 @@ import signal
 import sys
 import os
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
+import re
 
 # 配置日志
 logging.basicConfig(
@@ -57,6 +58,448 @@ class NewsItem:
             result['stock_info'] = self.stock_info
             
         return result
+
+class StockIndex:
+    """股指数据结构"""
+    def __init__(self, name: str, code: str, current_price: float, change: float, change_percent: float):
+        self.name = name
+        self.code = code 
+        self.current_price = current_price
+        self.change = change
+        self.change_percent = change_percent
+        self.timestamp = datetime.now()
+    
+    def to_dict(self) -> Dict:
+        return {
+            'name': self.name,
+            'code': self.code,
+            'current_price': self.current_price,
+            'change': self.change,
+            'change_percent': self.change_percent,
+            'timestamp': self.timestamp.isoformat()
+        }
+
+class SectorData:
+    """板块数据结构"""
+    def __init__(self, name: str, change_percent: float, sector_type: str = "gainer"):
+        self.name = name
+        self.change_percent = change_percent
+        self.sector_type = sector_type  # "gainer" or "loser"
+        self.timestamp = datetime.now()
+    
+    def to_dict(self) -> Dict:
+        return {
+            'name': self.name,
+            'change_percent': self.change_percent,
+            'sector_type': self.sector_type,
+            'timestamp': self.timestamp.isoformat()
+        }
+
+class BigAPool:
+    """大A模式数据管理器"""
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.indices: List[StockIndex] = []
+        self.sectors: List[SectorData] = []
+        self.telegraph_items: List[NewsItem] = []
+        self.last_indices_update = datetime.min
+        self.last_sectors_update = datetime.min
+        self.last_telegraph_update = datetime.min
+        
+        # 更新间隔设置
+        self.indices_update_interval = 60  # 股指每分钟更新
+        self.sectors_update_interval = 300  # 板块每5分钟更新
+        self.telegraph_update_interval = 30  # 电报每30秒更新
+        
+        # 启动数据更新线程
+        self.running = True
+        self.update_thread = threading.Thread(target=self._update_worker, daemon=True)
+        self.update_thread.start()
+    
+    def _update_worker(self):
+        """后台数据更新工作线程"""
+        while self.running:
+            try:
+                now = datetime.now()
+                
+                # 更新股指数据
+                if (now - self.last_indices_update).total_seconds() >= self.indices_update_interval:
+                    self._update_indices()
+                    self.last_indices_update = now
+                
+                # 更新板块数据
+                if (now - self.last_sectors_update).total_seconds() >= self.sectors_update_interval:
+                    self._update_sectors()
+                    self.last_sectors_update = now
+                
+                # 更新电报数据
+                if (now - self.last_telegraph_update).total_seconds() >= self.telegraph_update_interval:
+                    self._update_telegraph()
+                    self.last_telegraph_update = now
+                
+                time.sleep(10)  # 每10秒检查一次
+                
+            except Exception as e:
+                logger.error(f"BigA数据更新错误: {e}")
+    
+    def _update_indices(self):
+        """更新股指数据"""
+        try:
+            new_indices = self._fetch_stock_indices()
+            with self.lock:
+                self.indices = new_indices
+            logger.info(f"已更新{len(new_indices)}个股指数据")
+        except Exception as e:
+            logger.error(f"更新股指数据失败: {e}")
+    
+    def _update_sectors(self):
+        """更新板块数据"""
+        try:
+            new_sectors = self._fetch_sector_data()
+            with self.lock:
+                self.sectors = new_sectors
+            logger.info(f"已更新{len(new_sectors)}个板块数据")
+        except Exception as e:
+            logger.error(f"更新板块数据失败: {e}")
+    
+    def _update_telegraph(self):
+        """更新电报数据 - 每30秒完全替换为最新5条"""
+        try:
+            current_time = datetime.now().strftime("%H:%M:%S")
+            logger.info(f"开始更新电报数据 - 当前时间: {current_time}")
+            
+            new_telegraph = self._fetch_recent_telegraph()
+            with self.lock:
+                # 完全替换池子内容为最新的5条电报
+                self.telegraph_items = new_telegraph[:5]
+                
+            # 记录更新后的电报时间
+            times = [item.news_time for item in self.telegraph_items if item.news_time]
+            logger.info(f"已更新电报数据，完全替换为最新{len(self.telegraph_items)}条电报")
+            logger.info(f"更新后电报时间: {times}")
+        except Exception as e:
+            logger.error(f"更新电报数据失败: {e}")
+    
+    def _fetch_stock_indices(self) -> List[StockIndex]:
+        """获取股指数据 - 从新浪财经API"""
+        indices = []
+        
+        # 定义需要获取的股指代码
+        index_codes = {
+            'sh000001': '上证指数',
+            'sz399001': '深证成指', 
+            'sz399006': '创业板指',
+            'sh000688': '科创50',
+            'bj899050': '北证50'
+        }
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://finance.sina.com.cn/'
+        }
+        
+        try:
+            # 构建API URL
+            codes_param = ','.join(index_codes.keys())
+            api_url = f"https://hq.sinajs.cn/list={codes_param}"
+            
+            response = requests.get(api_url, headers=headers, timeout=10)
+            response.encoding = 'gbk'  # 新浪API返回GBK编码
+            
+            if response.status_code == 200:
+                lines = response.text.strip().split('\n')
+                for line in lines:
+                    if '=' in line and '"' in line:
+                        # 解析数据格式: var hq_str_sh000001="上证指数,3234.12,3245.67,..."
+                        code = line.split('=')[0].replace('var hq_str_', '')
+                        if code in index_codes:
+                            data_str = line.split('"')[1]
+                            if data_str:
+                                fields = data_str.split(',')
+                                if len(fields) >= 4:
+                                    try:
+                                        current_price = float(fields[3])
+                                        prev_close = float(fields[2])
+                                        change = current_price - prev_close
+                                        change_percent = (change / prev_close) * 100 if prev_close != 0 else 0
+                                        
+                                        index = StockIndex(
+                                            name=index_codes[code],
+                                            code=code,
+                                            current_price=current_price,
+                                            change=change,
+                                            change_percent=change_percent
+                                        )
+                                        indices.append(index)
+                                    except (ValueError, IndexError):
+                                        continue
+        except Exception as e:
+            logger.error(f"获取股指数据失败: {e}")
+        
+        return indices
+    
+    def _fetch_sector_data(self) -> List[SectorData]:
+        """获取板块数据"""
+        sectors = []
+        
+        try:
+            # 从东方财富获取板块数据
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            # 板块排行API
+            api_url = "http://push2.eastmoney.com/api/qt/clist/get"
+            params = {
+                'pn': '1',
+                'pz': '50',
+                'po': '1',
+                'np': '1',
+                'ut': 'bd1d9ddb04089700cf9c27f6f7426281',
+                'fltt': '2',
+                'invt': '2',
+                'fid': 'f3',  # 按涨跌幅排序
+                'fs': 'm:90+t:2',  # 板块分类
+                'fields': 'f1,f2,f3,f4,f12,f14'
+            }
+            
+            response = requests.get(api_url, params=params, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('data') and data['data'].get('diff'):
+                    items = data['data']['diff']
+                    
+                    # 按涨跌幅排序
+                    items.sort(key=lambda x: float(x.get('f3', 0)), reverse=True)
+                    
+                    # 取前5涨幅
+                    for item in items[:5]:
+                        if float(item.get('f3', 0)) > 0:
+                            sector = SectorData(
+                                name=item.get('f14', '未知板块'),
+                                change_percent=float(item.get('f3', 0)),
+                                sector_type="gainer"
+                            )
+                            sectors.append(sector)
+                    
+                    # 取后3跌幅
+                    for item in items[-3:]:
+                        if float(item.get('f3', 0)) < 0:
+                            sector = SectorData(
+                                name=item.get('f14', '未知板块'),
+                                change_percent=float(item.get('f3', 0)),
+                                sector_type="loser"
+                            )
+                            sectors.append(sector)
+                            
+        except Exception as e:
+            logger.error(f"获取板块数据失败: {e}")
+        
+        return sectors
+    
+    def _fetch_recent_telegraph(self) -> List[NewsItem]:
+        """获取最近30分钟的财联社电报"""
+        telegraph_items = []
+        
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+            }
+            
+            response = requests.get('https://www.cls.cn/telegraph', headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # 查找电报内容 - 尝试多种选择器
+            telegraph_blocks = soup.find_all('div', class_=lambda x: x and 'telegraph-content-box' in x)
+            
+            # 如果第一个选择器没找到，尝试其他选择器
+            if not telegraph_blocks:
+                logger.info("使用备选选择器查找电报内容")
+                telegraph_blocks = soup.find_all('div', class_=lambda x: x and 'telegraph' in str(x).lower())
+                
+            if not telegraph_blocks:
+                # 尝试查找包含时间格式的内容块
+                telegraph_blocks = soup.find_all('div', string=lambda text: text and ':' in text and len(text.split(':')) >= 3)
+            logger.info(f"找到 {len(telegraph_blocks)} 个电报块")
+            
+            fifteen_minutes_ago = datetime.now() - timedelta(minutes=15)
+            
+            for i, block in enumerate(telegraph_blocks[:20]):  # 限制处理数量
+                try:
+                    # 提取时间
+                    time_element = block.find('span', class_='telegraph-time-box')
+                    if time_element:
+                        time_text = time_element.get_text(strip=True)
+                        logger.info(f"电报块 {i}: 时间 {time_text}")
+                        # 解析时间格式 HH:MM:SS
+                        if re.match(r'^\d{1,2}:\d{2}:\d{2}$', time_text):
+                            today = datetime.now().date()
+                            time_parts = time_text.split(':')
+                            news_time = datetime.combine(
+                                today, 
+                                datetime.min.time().replace(
+                                    hour=int(time_parts[0]), 
+                                    minute=int(time_parts[1]), 
+                                    second=int(time_parts[2])
+                                )
+                            )
+                            
+                            logger.info(f"解析时间: {news_time}, 15分钟前: {fifteen_minutes_ago}")
+                            # 只要最近15分钟的
+                            if news_time < fifteen_minutes_ago:
+                                logger.info(f"跳过旧新闻: {time_text}")
+                                continue
+                        else:
+                            logger.warning(f"时间格式不匹配: {time_text}")
+                            continue
+                    else:
+                        logger.warning(f"电报块 {i}: 未找到时间元素")
+                        continue
+                    
+                    # 提取标题和内容
+                    content_element = block.find('div')
+                    if content_element:
+                        title = content_element.get_text(strip=True)
+                        # 彻底清理换行符和控制字符
+                        title = title.replace('\n', '').replace('\r', '').replace('\u2028', '').replace('\u2029', '')
+                        title = ' '.join(title.split())  # 清理多余空格
+                        if title and len(title) > 10:
+                            # 提取链接
+                            link_element = block.find('a')
+                            url = link_element.get('href', '') if link_element else ''
+                            
+                            if url and not url.startswith('http'):
+                                url = f"https://www.cls.cn{url}"
+                            
+                            # 提取股票信息
+                            stock_container = block.find_next('div', class_='industry-stock')
+                            stock_info = None
+                            if stock_container:
+                                stock_items = []
+                                stock_links = stock_container.find_all('a')
+                                for link in stock_links[:3]:  # 最多3只股票
+                                    name_span = link.find('span', class_='c-222')
+                                    change_span = link.find('span', class_='c-de0422')
+                                    if name_span and change_span:
+                                        name = name_span.get_text(strip=True)
+                                        change = change_span.get_text(strip=True)
+                                        stock_items.append(f"{name} {change}")
+                                
+                                if stock_items:
+                                    stock_info = ' '.join(stock_items)
+                            
+                            news_item = NewsItem(
+                                title=title,
+                                url=url,
+                                source="财联社电报",
+                                news_time=time_text if time_element else None,
+                                stock_info=stock_info
+                            )
+                            telegraph_items.append(news_item)
+                            logger.info(f"添加电报项: {time_text} - {title[:50]}...")
+                            
+                except Exception as e:
+                    logger.debug(f"解析电报项错误: {e}")
+                    continue
+            
+            # 按新闻时间排序，最新的在前
+            def parse_news_time(item):
+                if item.news_time:
+                    try:
+                        time_parts = item.news_time.split(':')
+                        today = datetime.now().date()
+                        return datetime.combine(today, datetime.min.time().replace(
+                            hour=int(time_parts[0]), 
+                            minute=int(time_parts[1]), 
+                            second=int(time_parts[2])
+                        ))
+                    except:
+                        return datetime.min
+                return datetime.min
+            
+            telegraph_items.sort(key=parse_news_time, reverse=True)
+            logger.info(f"最终获得 {len(telegraph_items)} 个有效电报项")
+            
+            # 记录排序后的前5个电报时间
+            for i, item in enumerate(telegraph_items[:5]):
+                logger.info(f"排序后第{i+1}个电报: {item.news_time}")
+            
+        except Exception as e:
+            logger.error(f"获取财联社电报失败: {e}")
+        
+        return telegraph_items[:5]  # 只保留最新5条
+    
+    def get_display_content(self) -> Dict:
+        """获取当前应该显示的内容 - 基于10秒轮播"""
+        with self.lock:
+            current_time = datetime.now()
+            # 使用更精确的轮播机制，减少同步问题
+            cycle_second = int(current_time.timestamp()) % 10
+            
+            # 记录轮播状态到调试日志
+            logger.debug(f"轮播状态: 当前时间={current_time.strftime('%H:%M:%S')}, 周期秒={cycle_second}")
+            
+            if cycle_second < 5:
+                # 0-5秒：显示电报（轮播最新的5条中的前3条）
+                if self.telegraph_items:
+                    # 优先轮播最新的3条电报
+                    display_telegraph = self.telegraph_items[:3]
+                    if display_telegraph:
+                        telegraph_index = (cycle_second * len(display_telegraph)) // 5
+                        if telegraph_index < len(display_telegraph):
+                            return {
+                                'type': 'telegraph',
+                                'content': display_telegraph[telegraph_index].to_dict()
+                            }
+                
+                return {
+                    'type': 'telegraph', 
+                    'content': {'title': '📈 等待财联社电报数据...', 'source': '财联社电报'}
+                }
+            else:
+                # 5-10秒：显示股指和板块
+                display_data = {
+                    'type': 'market',
+                    'indices': [idx.to_dict() for idx in self.indices],
+                    'sectors': [sector.to_dict() for sector in self.sectors]
+                }
+                return display_data
+    
+    def get_indices(self) -> List[Dict]:
+        """获取股指数据"""
+        with self.lock:
+            return [idx.to_dict() for idx in self.indices]
+    
+    def get_sectors(self) -> List[Dict]:
+        """获取板块数据"""
+        with self.lock:
+            return [sector.to_dict() for sector in self.sectors]
+    
+    def get_telegraph(self) -> List[Dict]:
+        """获取电报数据"""
+        with self.lock:
+            return [item.to_dict() for item in self.telegraph_items]
+    
+    def get_status(self) -> Dict:
+        """获取BigA模式状态"""
+        with self.lock:
+            return {
+                'indices_count': len(self.indices),
+                'sectors_count': len(self.sectors),
+                'telegraph_count': len(self.telegraph_items),
+                'last_indices_update': self.last_indices_update.isoformat(),
+                'last_sectors_update': self.last_sectors_update.isoformat(),
+                'last_telegraph_update': self.last_telegraph_update.isoformat()
+            }
+    
+    def stop(self):
+        """停止BigA数据更新"""
+        self.running = False
+        if self.update_thread.is_alive():
+            self.update_thread.join(timeout=5)
 
 class NewsPool:
     """新闻池管理器"""
@@ -510,6 +953,17 @@ class NewsAPIHandler(BaseHTTPRequestHandler):
                 self._handle_random(count)
             elif path == '/refresh':
                 self._handle_refresh()
+            # BigA模式API端点
+            elif path == '/biga/status':
+                self._handle_biga_status()
+            elif path == '/biga/next':
+                self._handle_biga_next()
+            elif path == '/biga/indices':
+                self._handle_biga_indices()
+            elif path == '/biga/sectors':
+                self._handle_biga_sectors()
+            elif path == '/biga/telegraph':
+                self._handle_biga_telegraph()
             else:
                 self._send_error(404, "Not Found")
         except Exception as e:
@@ -536,6 +990,32 @@ class NewsAPIHandler(BaseHTTPRequestHandler):
         threading.Thread(target=news_pool.refresh_news, daemon=True).start()
         self._send_json_response({'message': 'Refresh started'})
     
+    # BigA模式处理函数
+    def _handle_biga_status(self):
+        """处理BigA模式状态请求"""
+        status = biga_pool.get_status()
+        self._send_json_response(status)
+    
+    def _handle_biga_next(self):
+        """处理BigA模式下一个内容请求"""
+        content = biga_pool.get_display_content()
+        self._send_json_response(content)
+    
+    def _handle_biga_indices(self):
+        """处理BigA模式股指数据请求"""
+        indices = biga_pool.get_indices()
+        self._send_json_response(indices)
+    
+    def _handle_biga_sectors(self):
+        """处理BigA模式板块数据请求"""
+        sectors = biga_pool.get_sectors()
+        self._send_json_response(sectors)
+    
+    def _handle_biga_telegraph(self):
+        """处理BigA模式电报数据请求"""
+        telegraph = biga_pool.get_telegraph()
+        self._send_json_response(telegraph)
+    
     def _send_json_response(self, data):
         response = json.dumps(data, ensure_ascii=False, indent=2)
         self.send_response(200)
@@ -557,9 +1037,11 @@ class NewsAPIHandler(BaseHTTPRequestHandler):
 def signal_handler(signum, frame):
     """信号处理器"""
     logger.info("收到退出信号，正在停止服务...")
-    global news_pool, httpd
+    global news_pool, biga_pool, httpd
     if news_pool:
         news_pool.stop()
+    if biga_pool:
+        biga_pool.stop()
     if httpd:
         httpd.shutdown()
     sys.exit(0)
@@ -623,6 +1105,11 @@ def main():
         logger.info("初始化新闻池...")
         news_pool = NewsPool()
         
+        # 初始化BigA模式数据池
+        logger.info("初始化BigA模式数据池...")
+        global biga_pool
+        biga_pool = BigAPool()
+        
         # 启动HTTP服务器
         port = int(os.getenv('NEWS_SERVICE_PORT', '8765'))
         server_address = ('localhost', port)
@@ -634,6 +1121,12 @@ def main():
         logger.info("  GET /next    - 下一条新闻")
         logger.info("  GET /random?count=N - 随机新闻")
         logger.info("  GET /refresh - 手动刷新")
+        logger.info("BigA Mode endpoints:")
+        logger.info("  GET /biga/status    - BigA模式状态")
+        logger.info("  GET /biga/next      - BigA模式轮播内容")
+        logger.info("  GET /biga/indices   - 股指数据")
+        logger.info("  GET /biga/sectors   - 板块数据")
+        logger.info("  GET /biga/telegraph - 电报数据")
         
         httpd.serve_forever()
         
@@ -645,5 +1138,6 @@ def main():
 
 if __name__ == "__main__":
     news_pool = None
+    biga_pool = None
     httpd = None
     main()
