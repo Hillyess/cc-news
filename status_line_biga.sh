@@ -302,9 +302,9 @@ get_biga_data() {
             
             if [ -n "$indices_display" ] || [ -n "$sectors_display" ]; then
                 if [ -n "$indices_display" ] && [ -n "$sectors_display" ]; then
-                    printf "🏛️%s | %s" "$indices_display" "$sectors_display"
+                    printf "%s | %s" "$indices_display" "$sectors_display"
                 elif [ -n "$indices_display" ]; then
-                    printf "🏛️%s" "$indices_display"
+                    printf "%s" "$indices_display"
                 else
                     printf "%s" "$sectors_display"
                 fi
