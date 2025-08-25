@@ -98,8 +98,22 @@ format_telegraph_content() {
     local news_time="$4"
     local stock_info="$5"
     
-    # 更彻底地清理标题中的换行符和控制字符
-    title=$(echo "$title" | tr -d '\n\r\u2028\u2029' | sed 's/[[:space:]]\+/ /g' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    # 安全清理标题中的换行符和控制字符，保护数字内容
+    # 先用tr删除普通换行符，再用sed处理特殊空白字符
+    title=$(echo "$title" | tr -d '\n\r' | sed 's/[\x09\x0B\x0C]/ /g' | sed 's/[[:space:]]\+/ /g' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    
+    # 数字保护验证 - 检查关键数字是否被误删
+    original_digits=$(echo "$1" | grep -o '[0-9]' | wc -l)
+    processed_digits=$(echo "$title" | grep -o '[0-9]' | wc -l)
+    
+    # 记录文本处理过程和数字保留情况
+    echo "[$(date '+%H:%M:%S')] 文本处理前: ${1:0:50}... (数字数量: $original_digits)" >> "/tmp/biga_status_debug.log" 2>/dev/null || true
+    echo "[$(date '+%H:%M:%S')] 文本处理后: ${title:0:50}... (数字数量: $processed_digits)" >> "/tmp/biga_status_debug.log" 2>/dev/null || true
+    
+    # 如果数字明显减少，记录警告
+    if [ "$processed_digits" -lt "$((original_digits - 1))" ]; then
+        echo "[$(date '+%H:%M:%S')] ⚠️ 警告: 数字可能被误删！原始: $original_digits, 处理后: $processed_digits" >> "/tmp/biga_status_debug.log" 2>/dev/null || true
+    fi
     
     # 对于财联社新闻，只提取中括号内的标题部分
     if [[ "$source" =~ 财联社 ]] && [[ "$title" =~ 【([^】]+)】 ]]; then

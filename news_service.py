@@ -363,9 +363,18 @@ class BigAPool:
                     content_element = block.find('div')
                     if content_element:
                         title = content_element.get_text(strip=True)
-                        # 彻底清理换行符和控制字符
-                        title = title.replace('\n', '').replace('\r', '').replace('\u2028', '').replace('\u2029', '')
-                        title = ' '.join(title.split())  # 清理多余空格
+                        # 安全清理换行符和控制字符，保护数字内容
+                        original_title = title  # 保存原始标题用于调试
+                        title = title.replace('\n', ' ').replace('\r', ' ').replace('\u2028', ' ').replace('\u2029', ' ')
+                        # 使用更安全的空格处理，确保数字不被误删
+                        import re
+                        title = re.sub(r'\s+', ' ', title).strip()  # 将多个空白字符替换为单个空格
+                        
+                        # 调试：记录文本处理过程
+                        if original_title != title:
+                            logger.debug(f"文本处理: 原始='{original_title[:50]}...' -> 处理后='{title[:50]}...'")
+                        else:
+                            logger.debug(f"文本无需处理: '{title[:50]}...'")
                         if title and len(title) > 10:
                             # 提取链接
                             link_element = block.find('a')
